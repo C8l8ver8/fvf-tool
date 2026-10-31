@@ -1,0 +1,635 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FVF Viewer</title>
+<style>
+:root{
+  --bg:#14161a; --panel:#1d2026; --panel2:#252932; --line:#343a46; --text:#e6e9ef; --dim:#9aa3b2;
+  --accent:#5aa9ff; --good:#4cc38a; --warn:#f2b94b; --bad:#ff6b6b; --pad:16px;
+}
+:root[data-theme="light"]{
+  --bg:#f3f4f7; --panel:#ffffff; --panel2:#eceef3; --line:#cfd4dd; --text:#1b1e24; --dim:#566070;
+  --accent:#1766c9; --good:#17803f; --warn:#9a6700; --bad:#c62828;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f3f4f7; --panel:#ffffff; --panel2:#eceef3; --line:#cfd4dd; --text:#1b1e24; --dim:#566070;
+    --accent:#1766c9; --good:#17803f; --warn:#9a6700; --bad:#c62828;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+body{padding:0 var(--pad) 40px}
+h1{font-size:18px;margin:14px 0 2px}
+h2{font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:600}
+.sub{color:var(--dim);margin:0 0 12px}
+button,select,input[type=number]{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 10px}
+button{cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+input[type=range]{accent-color:var(--accent);width:100%}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
+@media (max-width:1050px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:12px;min-width:240px;flex:1 1 260px;transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:var(--panel2)}
+.drop b{display:block;margin-bottom:2px}
+.drop .name{color:var(--dim);word-break:break-all;font-size:13px}
+.slot{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#stage{background:#000;border-radius:8px;display:flex;justify-content:center;align-items:flex-start;overflow:auto;min-height:120px;padding:0}
+canvas#view{image-rendering:pixelated;display:block;cursor:crosshair}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px}
+.kv div:nth-child(odd){color:var(--dim)}
+.warn{color:var(--warn)} .bad{color:var(--bad)} .good{color:var(--good)} .dim{color:var(--dim)}
+table{border-collapse:collapse;width:100%}
+th,td{padding:3px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--dim);font-weight:600;position:sticky;top:0;background:var(--panel)}
+td:first-child,th:first-child{text-align:left}
+tr.clk{cursor:pointer} tr.clk:hover{background:var(--panel2)}
+#worst{max-height:300px;overflow:auto}
+canvas#graph{width:100%;height:96px;display:block;background:var(--panel2);border-radius:6px;cursor:pointer}
+.bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--accent)}
+.hidden{display:none!important}
+kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 5px;font:12px ui-monospace,Consolas,monospace}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:16px;max-width:520px;width:calc(100% - 32px)}
+dialog::backdrop{background:#0008}
+.small{font-size:12px}
+details summary{cursor:pointer;color:var(--dim)}
+.sep{height:10px}
+#msg{margin:8px 0;min-height:1.4em}
+</style>
+</head>
+<body>
+<h1>FVF Viewer</h1>
+<p class="sub">Plays and compares the videos of <i>Star Trek: The Next Generation – A Final Unity</i>. Everything runs in this page; no file leaves your computer.</p>
+
+<div class="row" id="slots">
+  <div class="drop" id="dropA">
+    <b>A &nbsp;· original</b>
+    <div class="slot"><button id="openA" class="primary">Open .fvf or .zip…</button><span class="name" id="nameA">drop a file here</span></div>
+    <input type="file" id="fileA" accept=".fvf,.zip" class="hidden">
+  </div>
+  <div class="drop" id="dropB">
+    <b>B &nbsp;· new / re-encoded <span class="dim">(optional)</span></b>
+    <div class="slot"><button id="openB">Open .fvf or .zip…</button><span class="name" id="nameB">drop a file here to compare</span><button id="clearB" class="hidden">Remove</button></div>
+    <input type="file" id="fileB" accept=".fvf,.zip" class="hidden">
+  </div>
+</div>
+<div id="msg" class="small"></div>
+<div id="prog" class="bar hidden"><i></i></div>
+
+<div class="grid" id="main" style="margin-top:10px">
+  <div>
+    <div class="card">
+      <div class="row" style="margin-bottom:8px">
+        <span class="dim">View</span>
+        <span class="row" id="modes" style="gap:4px">
+          <button data-m="A">A</button><button data-m="B">B</button><button data-m="sbs">Side by side</button><button data-m="diff">Difference</button><button data-m="wipe">Wipe</button>
+        </span>
+        <span class="dim" style="margin-left:8px">Zoom</span>
+        <select id="zoom"><option value="fit" selected>Fit</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+        <label class="dim"><input type="checkbox" id="aspect" checked> 4:3 shape</label>
+        <span class="dim" id="ampWrap">Difference ×<input type="number" id="amp" value="8" min="1" max="64" style="width:62px"></span>
+        <button id="savePng" title="Save the picture shown">Save PNG</button>
+        <button id="theme" title="Switch between light and dark">Light/Dark</button>
+      </div>
+      <div id="stage"><canvas id="view" width="320" height="200"></canvas></div>
+      <div class="mono dim" id="inspect" style="margin-top:6px;min-height:1.4em">move the mouse over the picture to read pixel values</div>
+
+      <div class="sep"></div>
+      <div class="row">
+        <button id="bFirst" title="Home">⏮</button>
+        <button id="bBack15" title="Shift+←  (1 second)">−15</button>
+        <button id="bBack" title="←">◀</button>
+        <button id="bPlay" class="primary" style="min-width:84px" title="Space">▶ Play</button>
+        <button id="bFwd" title="→">▶</button>
+        <button id="bFwd15" title="Shift+→  (1 second)">+15</button>
+        <button id="bLast" title="End">⏭</button>
+        <span class="dim" style="margin-left:8px">Frame</span><input type="number" id="frameNum" value="0" min="0" style="width:84px">
+        <span class="mono" id="timeLbl">0.00 s</span>
+        <select id="speed" title="Playback speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+        <label class="dim"><input type="checkbox" id="loop"> loop</label>
+        <label class="dim"><input type="checkbox" id="mute"> mute</label>
+      </div>
+      <input type="range" id="seek" min="0" max="0" value="0" style="margin-top:8px">
+    </div>
+
+    <div class="card" style="margin-top:14px" id="graphCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
+        <h2 style="margin:0">Timeline</h2>
+        <span class="row">
+          <select id="metric">
+            <option value="mad">Average error (MAD)</option>
+            <option value="bias">Brightness bias (green)</option>
+            <option value="max">Largest single error</option>
+            <option value="big">Pixels off by more than 8 (%)</option>
+            <option value="bytes">Video bytes per frame</option>
+            <option value="step">Change since previous frame (A)</option>
+          </select>
+          <button id="prevFlag" title="[">◀ flagged</button><button id="nextFlag" title="]">flagged ▶</button>
+          <span class="dim small">flag at ≥</span><input type="number" id="thr" step="any" style="width:76px">
+        </span>
+      </div>
+      <canvas id="graph"></canvas>
+      <div class="small dim" id="graphNote">Red ticks mark big scene changes (the picture changes by more than 25 on average between two frames). Click or drag to jump.</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card"><h2>This frame</h2><div class="kv mono" id="frameInfo"><div>–</div><div></div></div></div>
+    <div class="card" style="margin-top:14px"><h2>Files</h2><div id="fileInfo" class="small"></div></div>
+    <div class="card" style="margin-top:14px"><h2>Worst frames</h2><div id="worst" class="small"><span class="dim">(needs a B file)</span></div></div>
+    <details class="card" style="margin-top:14px"><summary>Keyboard and notes</summary>
+      <div class="small" style="margin-top:8px">
+        <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> one frame · <kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> one second · <kbd>Home</kbd><kbd>End</kbd><br>
+        <kbd>[</kbd> <kbd>]</kbd> previous/next flagged frame · <kbd>F</kbd> flip A ↔ B · <kbd>1</kbd>–<kbd>5</kbd> view modes · <kbd>+</kbd><kbd>-</kbd> zoom<br><br>
+        <b>MAD</b> = mean absolute difference between A and B over all pixels and colours (0 = identical, 255 = black vs white).
+        <b>Bias</b> = average (B − A); a negative green bias means B is darker, which shows as a pink/purple cast.<br><br>
+        You can open <code>STTNG.ZIP</code> directly; you will be asked which uncompressed <code>.fvf</code> inside it to load.
+        Audio plays from file A. The pictures are decoded exactly as the game's decoder does it (320×200, 15 fps).
+      </div>
+    </details>
+  </div>
+</div>
+
+<dialog id="zipDlg">
+  <h2 style="margin-top:0">Choose a video inside the zip</h2>
+  <p class="small dim" id="zipFile"></p>
+  <select id="zipSel" size="10" style="width:100%"></select>
+  <div class="row" style="justify-content:flex-end;margin-top:12px">
+    <button id="zipCancel">Cancel</button><button id="zipOk" class="primary">Open</button>
+  </div>
+</dialog>
+
+<script>
+/*INLINE_DECODER*/
+</script>
+<script>
+(function(){
+'use strict';
+const $ = (id)=>document.getElementById(id);
+const FPS = 15, SNAP = 32, N_PIX = 64000, N_RGB = 192000;
+const fmt = (n,d)=>Number(n).toFixed(d===undefined?2:d);
+const esc = (s)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ------------------------------------------------------------ clip (one decoded video, with seeking)
+class Clip {
+  constructor(label, bytes){
+    this.label = label; this.bytes = bytes;
+    this.file = new FVF.FVFFile(bytes);
+    this.recs = this.file.readAll();
+    this.n = this.recs.length;
+    this.reset(); this.snaps = new Map(); this.errors = new Map();
+    this.vbytes = Int32Array.from(this.recs, r=>r.videoLength);
+    this.flags = Int32Array.from(this.recs, r=>r.video ? (r.video[2] | (r.video[3]<<8)) : -1);
+  }
+  reset(){ this.dec = new FVF.Decoder(); this.cur = -1; }
+  _decode(i){
+    const r = this.recs[i];
+    if (r.video){
+      try { this.dec.decodeFrame(r.video, r.videoLength); }
+      catch(e){ if(!this.errors.has(i)) this.errors.set(i, e.message); }
+    }
+    if ((i+1) % SNAP === 0 && !this.snaps.has(i)) this.snaps.set(i, this.dec.snapshot());
+  }
+  seek(i){
+    i = Math.max(0, Math.min(this.n-1, i));
+    if (i === this.cur) return this.dec.rgb;
+    if (i < this.cur || i > this.cur + 64){
+      const b = Math.floor((i+1)/SNAP)*SNAP - 1;
+      if (b >= 0 && this.snaps.has(b)) { this.dec.restore(this.snaps.get(b)); this.cur = b; }
+      else this.reset();
+    }
+    while (this.cur < i) { this.cur++; this._decode(this.cur); }
+    return this.dec.rgb;
+  }
+  audioTotal(){ let t=0; for(const r of this.recs) if(r.audio) t+=r.audio.length; return t; }
+}
+
+// ------------------------------------------------------------ state
+const S = { A:null, B:null, mode:'A', frame:0, zoom:'fit', stats:null, playing:false, flagged:[], thr:0, wipeX:0.5,
+            audio:null, rgbA:null, rgbB:null };
+
+// ------------------------------------------------------------ file loading (fvf or zip)
+async function listZip(file){
+  const size = file.size, tailLen = Math.min(size, 70000);
+  const tail = new Uint8Array(await file.slice(size-tailLen, size).arrayBuffer());
+  const dv = new DataView(tail.buffer);
+  let i = tail.length - 22;
+  for (; i >= 0; i--) if (dv.getUint32(i, true) === 0x06054b50) break;
+  if (i < 0) throw new Error('not a zip file');
+  const nent = dv.getUint16(i+10, true), cdsize = dv.getUint32(i+12, true), cdoff = dv.getUint32(i+16, true);
+  if (nent === 0xFFFF || cdoff === 0xFFFFFFFF) throw new Error('zip64 archives are not supported');
+  const cd = new Uint8Array(await file.slice(cdoff, cdoff+cdsize).arrayBuffer()), c = new DataView(cd.buffer);
+  const out = []; let p = 0;
+  for (let k = 0; k < nent; k++){
+    if (c.getUint32(p, true) !== 0x02014b50) throw new Error('damaged zip directory');
+    const method = c.getUint16(p+10, true), usz = c.getUint32(p+24, true), nl = c.getUint16(p+28, true),
+          el = c.getUint16(p+30, true), cl = c.getUint16(p+32, true), lho = c.getUint32(p+42, true);
+    const name = new TextDecoder('latin1').decode(cd.subarray(p+46, p+46+nl));
+    out.push({name, method, usz, lho});
+    p += 46 + nl + el + cl;
+  }
+  return out;
+}
+async function readZipEntry(file, e){
+  const lh = new DataView(await file.slice(e.lho, e.lho+30).arrayBuffer());
+  const start = e.lho + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+  return new Uint8Array(await file.slice(start, start+e.usz).arrayBuffer());
+}
+function chooseZipEntry(file, entries){
+  return new Promise((resolve)=>{
+    const dlg = $('zipDlg'), sel = $('zipSel');
+    $('zipFile').textContent = file.name + ' — ' + entries.length + ' entries; only uncompressed .fvf entries can be opened';
+    sel.innerHTML = '';
+    const fv = entries.filter(e=>/\.fvf$/i.test(e.name));
+    for (const e of fv){
+      const o = document.createElement('option'); o.value = String(entries.indexOf(e));
+      o.textContent = e.name + '  (' + e.usz.toLocaleString() + ' bytes)' + (e.method ? '  — compressed, cannot open' : '');
+      o.disabled = !!e.method; sel.appendChild(o);
+    }
+    const firstOk = [...sel.options].find(o=>!o.disabled); if (firstOk) firstOk.selected = true;
+    let done = false;
+    const fin = (v)=>{ if(done) return; done = true; dlg.close(); resolve(v); };
+    $('zipOk').onclick = ()=>fin(sel.value !== '' ? entries[+sel.value] : null);
+    $('zipCancel').onclick = ()=>fin(null);
+    sel.ondblclick = ()=>fin(sel.value !== '' ? entries[+sel.value] : null);
+    dlg.oncancel = ()=>fin(null);
+    dlg.showModal();
+  });
+}
+async function loadInto(slot, file){
+  setMsg('Reading ' + file.name + ' …');
+  let bytes, label = file.name;
+  try {
+    if (/\.zip$/i.test(file.name)){
+      const entries = await listZip(file);
+      const e = await chooseZipEntry(file, entries);
+      if (!e){ setMsg(''); return; }
+      bytes = await readZipEntry(file, e); label = file.name + ' › ' + e.name;
+    } else bytes = new Uint8Array(await file.arrayBuffer());
+    const clip = new Clip(label, bytes);
+    S[slot] = clip;
+  } catch(e){ setMsg('Could not open ' + file.name + ': ' + e.message, 'bad'); return; }
+  $(slot==='A'?'nameA':'nameB').textContent = label;
+  $('clearB').classList.toggle('hidden', !S.B);
+  setMsg('');
+  await startAnalysis();
+}
+function setMsg(t, cls){ const m=$('msg'); m.textContent=t; m.className='small '+(cls||'dim'); }
+
+// ------------------------------------------------------------ analysis pass (stats + snapshots)
+let analysisToken = 0;
+async function startAnalysis(){
+  const token = ++analysisToken;
+  stopPlay();
+  S.audio = null;
+  const A = S.A, B = S.B;
+  if (!A){ render(); return; }
+  S.busy = true;
+  A.reset(); A.snaps.clear(); A.errors.clear();
+  if (B){ B.reset(); B.snaps.clear(); B.errors.clear(); }
+  const n = B ? Math.min(A.n, B.n) : A.n;
+  S.n = n;
+  const st = { n, mad:new Float32Array(n), madC:[new Float32Array(n),new Float32Array(n),new Float32Array(n)],
+    bias:[new Float32Array(n),new Float32Array(n),new Float32Array(n)], mx:new Float32Array(n), big:new Float32Array(n),
+    step:new Float32Array(n), done:0, hasB: !!B };
+  S.stats = st;
+  const prev = new Uint8Array(N_RGB);
+  $('prog').classList.remove('hidden');
+  let t0 = performance.now();
+  for (let i = 0; i < n; i++){
+    const a = A.seek(i);
+    // change since previous frame (for finding scene cuts)
+    if (i > 0){ let s = 0; for (let p = 0; p < N_RGB; p++){ const d = a[p]-prev[p]; s += d<0?-d:d; } st.step[i] = s/N_RGB; }
+    prev.set(a);
+    if (B){
+      const b = B.seek(i);
+      let sa0=0,sa1=0,sa2=0, sd0=0,sd1=0,sd2=0, mx=0, big=0;
+      for (let p = 0; p < N_RGB; p += 3){
+        let d0 = b[p]-a[p], d1 = b[p+1]-a[p+1], d2 = b[p+2]-a[p+2];
+        sd0 += d0; sd1 += d1; sd2 += d2;
+        if (d0<0) d0=-d0; if (d1<0) d1=-d1; if (d2<0) d2=-d2;
+        sa0 += d0; sa1 += d1; sa2 += d2;
+        const m = d0>d1?(d0>d2?d0:d2):(d1>d2?d1:d2);
+        if (m>mx) mx=m; if (m>8) big++;
+      }
+      st.madC[0][i]=sa0/N_PIX; st.madC[1][i]=sa1/N_PIX; st.madC[2][i]=sa2/N_PIX;
+      st.mad[i]=(sa0+sa1+sa2)/N_RGB;
+      st.bias[0][i]=sd0/N_PIX; st.bias[1][i]=sd1/N_PIX; st.bias[2][i]=sd2/N_PIX;
+      st.mx[i]=mx; st.big[i]=100*big/N_PIX;
+    }
+    st.done = i+1;
+    if (performance.now() - t0 > 40){
+      $('prog').firstElementChild.style.width = (100*(i+1)/n).toFixed(1)+'%';
+      setMsg('Analysing frame ' + (i+1) + ' / ' + n + ' …');
+      await new Promise(r=>setTimeout(r, 0)); t0 = performance.now();
+      if (token !== analysisToken) return;   // a newer analysis took over (it manages S.busy)
+    }
+  }
+  $('prog').classList.add('hidden'); setMsg('');
+  A.reset(); if (B) B.reset();
+  S.busy = false;
+  if (S.frame >= n) S.frame = 0;
+  S.mode = B ? (S.mode==='A'||S.mode==='B' ? 'sbs' : S.mode) : 'A';
+  buildFlags(true); fillFileInfo(); fillWorst();
+  $('seek').max = n-1; $('frameNum').max = n-1;
+  show(S.frame);
+}
+
+// ------------------------------------------------------------ metric / flags
+function metricArray(){
+  const st = S.stats, m = $('metric').value;
+  if (!st) return null;
+  if (m==='mad') return st.mad;
+  if (m==='bias') { const o=new Float32Array(st.n); for(let i=0;i<st.n;i++) o[i]=Math.abs(st.bias[1][i]); return o; }
+  if (m==='max') return st.mx;
+  if (m==='big') return st.big;
+  if (m==='step') return st.step;
+  if (m==='bytes') { const o=new Float32Array(st.n); for(let i=0;i<st.n;i++) o[i]=S.A.vbytes[i]; return o; }
+  return st.mad;
+}
+function percentile(arr, q){ const a=Array.from(arr).sort((x,y)=>x-y); return a.length? a[Math.min(a.length-1, Math.floor(q*a.length))] : 0; }
+function buildFlags(resetThr){
+  const st = S.stats; if (!st) return;
+  const m = $('metric').value, arr = metricArray();
+  if (resetThr){
+    let t = m==='mad' ? Math.max(1.0, percentile(arr, 0.99)) : percentile(arr, 0.99);
+    if (m==='step') t = 25;
+    if (m==='bytes') t = percentile(arr, 0.99);
+    $('thr').value = Number(t.toFixed(2));
+  }
+  S.thr = parseFloat($('thr').value) || 0;
+  S.flagged = [];
+  for (let i = 0; i < st.n; i++) if (arr[i] >= S.thr && (st.hasB || m==='step' || m==='bytes')) S.flagged.push(i);
+  drawGraph();
+}
+
+// ------------------------------------------------------------ drawing
+const cv = $('view'), cx = cv.getContext('2d');
+const tmpA = document.createElement('canvas'); tmpA.width=320; tmpA.height=200; const tA = tmpA.getContext('2d');
+const imgA = tA.createImageData(320,200), imgB = tA.createImageData(320,200), imgD = tA.createImageData(320,200);
+function toRGBA(img, rgb){ const d=img.data; for(let p=0,q=0;p<N_RGB;p+=3,q+=4){ d[q]=rgb[p]; d[q+1]=rgb[p+1]; d[q+2]=rgb[p+2]; d[q+3]=255; } }
+function toDiff(img, a, b, amp){ const d=img.data; for(let p=0,q=0;p<N_RGB;p+=3,q+=4){
+  let x=b[p]-a[p], y=b[p+1]-a[p+1], z=b[p+2]-a[p+2]; if(x<0)x=-x; if(y<0)y=-y; if(z<0)z=-z;
+  x*=amp; y*=amp; z*=amp; d[q]=x>255?255:x; d[q+1]=y>255?255:y; d[q+2]=z>255?255:z; d[q+3]=255; } }
+const off1 = document.createElement('canvas'); off1.width=320; off1.height=200; const o1 = off1.getContext('2d');
+const off2 = document.createElement('canvas'); off2.width=320; off2.height=200; const o2 = off2.getContext('2d');
+
+function zoomValue(logicalW){
+  if (S.zoom === 'fit'){ const w = ($('stage').clientWidth || 640) - 2, z = w / logicalW; return z >= 2 ? Math.floor(z) : Math.max(0.5, Math.floor(z*100)/100); }
+  return +S.zoom;
+}
+function show(i){
+  const A = S.A; if (!A || S.busy || !S.stats) return;
+  i = Math.max(0, Math.min(S.n-1, i|0)); S.frame = i;
+  S.rgbA = A.seek(i); S.rgbB = S.B ? S.B.seek(i) : null;
+  paint(); updateInfo(); drawGraph();
+  $('seek').value = i; if (document.activeElement !== $('frameNum')) $('frameNum').value = i;
+  $('timeLbl').textContent = fmt(i/FPS) + ' s';
+}
+function paint(){
+  const a = S.rgbA, b = S.rgbB; if (!a) return;
+  let mode = S.mode; if (!b && mode !== 'A') mode = 'A';
+  const sbs = mode === 'sbs';
+  const lw = sbs ? 648 : 320;
+  const z = zoomValue(lw), ys = $('aspect').checked ? 1.2 : 1;
+  cv.width = lw; cv.height = 200;
+  cv.style.width = (lw*z) + 'px'; cv.style.height = (200*z*ys) + 'px';
+  cx.imageSmoothingEnabled = false;
+  const put = (rgb, dx)=>{ toRGBA(imgA, rgb); o1.putImageData(imgA,0,0); cx.drawImage(off1, dx, 0); };
+  cx.fillStyle = '#000'; cx.fillRect(0,0,lw,200);
+  if (mode === 'A') put(a,0);
+  else if (mode === 'B') put(b,0);
+  else if (sbs){ put(a,0); put(b,328); }
+  else if (mode === 'diff'){ toDiff(imgD, a, b, Math.max(1, +$('amp').value||1)); o1.putImageData(imgD,0,0); cx.drawImage(off1,0,0); }
+  else if (mode === 'wipe'){
+    toRGBA(imgA,a); o1.putImageData(imgA,0,0); toRGBA(imgB,b); o2.putImageData(imgB,0,0);
+    const x = Math.round(S.wipeX*320);
+    cx.drawImage(off1, 0,0,x,200, 0,0,x,200); cx.drawImage(off2, x,0,320-x,200, x,0,320-x,200);
+    cx.fillStyle = '#ffd400'; cx.fillRect(x-0.5, 0, 1, 200);
+  }
+  document.querySelectorAll('#modes button').forEach(btn=>btn.classList.toggle('on', btn.dataset.m === mode));
+  $('ampWrap').classList.toggle('hidden', mode !== 'diff');
+  document.querySelectorAll('#modes button').forEach(btn=>{ if (!b && btn.dataset.m !== 'A') btn.disabled = true; else btn.disabled = false; });
+}
+function updateInfo(){
+  const A = S.A, B = S.B, i = S.frame, st = S.stats;
+  const rows = [];
+  const kv = (k,v)=>rows.push('<div>'+k+'</div><div>'+v+'</div>');
+  kv('Frame', i + ' of ' + (S.n-1));
+  kv('Time', fmt(i/FPS) + ' s of ' + fmt((S.n-1)/FPS) + ' s');
+  const fl = (c)=>c.flags[i] < 0 ? 'no video' : '0x'+c.flags[i].toString(16);
+  kv('A video', A.vbytes[i].toLocaleString() + ' B · flags ' + fl(A) + (A.errors.has(i)?' <span class="bad">ERROR</span>':''));
+  if (B){
+    kv('B video', B.vbytes[i].toLocaleString() + ' B · flags ' + fl(B) + (B.errors.has(i)?' <span class="bad">ERROR</span>':''));
+    const bs = st.bias, cls = (v,t)=>Math.abs(v)>=t?'warn':'';
+    kv('MAD', '<b>' + fmt(st.mad[i]) + '</b> &nbsp; R ' + fmt(st.madC[0][i]) + ' G ' + fmt(st.madC[1][i]) + ' B ' + fmt(st.madC[2][i]));
+    kv('Bias (B−A)', '<span class="'+cls(bs[0][i],1)+'">R ' + fmt(bs[0][i]) + '</span> <span class="'+cls(bs[1][i],1)+'">G ' + fmt(bs[1][i]) + '</span> <span class="'+cls(bs[2][i],1)+'">B ' + fmt(bs[2][i]) + '</span>');
+    kv('Largest error', fmt(st.mx[i],0));
+    kv('Off by >8', fmt(st.big[i]) + ' % of pixels');
+  }
+  kv('Scene change', fmt(st.step[i]) + (st.step[i] > 25 ? ' <span class="warn">(cut)</span>' : ''));
+  $('frameInfo').innerHTML = rows.join('');
+}
+function fillFileInfo(){
+  const A = S.A, B = S.B, out = [];
+  const one = (c, tag)=>{
+    const maxv = Math.max(...c.vbytes), nb = c.file.blockCount, pre = c.recs[0].audio ? c.recs[0].audio.length : 0;
+    const pal = c.recs.filter(r=>r.hasPalette).length;
+    return '<div style="margin-bottom:8px"><b>'+tag+'</b> '+esc(c.label)+'<br>'+c.bytes.length.toLocaleString()+' bytes · '+c.n+' frames ('+fmt(c.n/FPS,1)+' s) · '+nb+' blocks<br>'+
+      'largest video chunk '+maxv.toLocaleString()+' B · first-frame audio '+pre.toLocaleString()+' B · palettes '+pal+
+      (c.errors.size ? '<br><span class="bad">decode errors in '+c.errors.size+' frame(s), first at frame '+Math.min(...c.errors.keys())+': '+esc(c.errors.get(Math.min(...c.errors.keys())))+'</span>' : '<br><span class="good">decodes without errors</span>')+'</div>';
+  };
+  out.push(one(A,'A'));
+  if (B){
+    out.push(one(B,'B'));
+    const same = (ok, good, bad)=>'<div class="'+(ok?'good':'bad')+'">'+(ok?'✓ ':'✗ ')+(ok?good:bad)+'</div>';
+    out.push(same(A.bytes.length===B.bytes.length, 'same file size (the game needs this)', 'file sizes differ: the game will not accept B'));
+    out.push(same(A.n===B.n, 'same number of frames', 'frame counts differ ('+A.n+' vs '+B.n+')'));
+    let aud = A.n===B.n; if (aud) for (let i=0;i<A.n && aud;i++){ const x=A.recs[i].audio, y=B.recs[i].audio; const lx=x?x.length:0, ly=y?y.length:0; if (lx!==ly) aud=false; else for (let k=0;k<lx;k++) if (x[k]!==y[k]){ aud=false; break; } }
+    out.push(same(aud, 'audio identical', 'audio differs'));
+    const st = S.stats; let sum=0; for (let i=0;i<st.n;i++) sum+=st.mad[i];
+    out.push('<div class="dim" style="margin-top:6px">Overall: mean MAD '+fmt(sum/st.n)+' · median '+fmt(percentile(st.mad,0.5))+' · worst '+fmt(Math.max(...st.mad))+'</div>');
+  }
+  $('fileInfo').innerHTML = out.join('');
+}
+function fillWorst(){
+  const st = S.stats; if (!st || !st.hasB){ $('worst').innerHTML = '<span class="dim">(needs a B file)</span>'; return; }
+  const idx = Array.from({length:st.n},(_,i)=>i).sort((x,y)=>st.mad[y]-st.mad[x]).slice(0,40);
+  $('worst').innerHTML = '<table><tr><th>frame</th><th>time</th><th>MAD</th><th>G bias</th><th>max</th></tr>' +
+    idx.map(i=>'<tr class="clk" data-f="'+i+'"><td>'+i+'</td><td>'+fmt(i/FPS,1)+'s</td><td>'+fmt(st.mad[i])+'</td><td>'+fmt(st.bias[1][i])+'</td><td>'+fmt(st.mx[i],0)+'</td></tr>').join('') + '</table>';
+  $('worst').querySelectorAll('tr.clk').forEach(tr=>tr.onclick=()=>{ stopPlay(); show(+tr.dataset.f); });
+}
+
+// ------------------------------------------------------------ graph
+const gc = $('graph'), gx = gc.getContext('2d');
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function drawGraph(){
+  const st = S.stats; if (!st) return;
+  const dpr = window.devicePixelRatio || 1, W = gc.clientWidth, H = gc.clientHeight;
+  if (gc.width !== Math.round(W*dpr) || gc.height !== Math.round(H*dpr)){ gc.width = Math.round(W*dpr); gc.height = Math.round(H*dpr); }
+  gx.setTransform(dpr,0,0,dpr,0,0); gx.clearRect(0,0,W,H);
+  const n = st.n, m = $('metric').value, arr = metricArray();
+  const arrB = (m==='bytes' && S.B) ? Float32Array.from({length:n},(_,i)=>S.B.vbytes[i]) : null;
+  let mx = 0; for (let i=0;i<n;i++){ if (arr[i]>mx) mx=arr[i]; if (arrB && arrB[i]>mx) mx=arrB[i]; }
+  mx = mx || 1;
+  const x0 = 0, plotH = H - 4;
+  const colA = cssVar('--accent'), colB = cssVar('--warn'), colBad = cssVar('--bad');
+  // threshold line
+  if (m !== 'bytes' || true){ const y = plotH - Math.min(1, S.thr/mx)*(plotH-6); gx.strokeStyle = colBad; gx.globalAlpha = .45; gx.setLineDash([4,4]); gx.beginPath(); gx.moveTo(0,y); gx.lineTo(W,y); gx.stroke(); gx.setLineDash([]); gx.globalAlpha = 1; }
+  const draw = (a, col)=>{
+    gx.strokeStyle = col; gx.lineWidth = 1; gx.beginPath();
+    for (let px = 0; px < W; px++){
+      const f0 = Math.floor(px/W*n), f1 = Math.max(f0+1, Math.floor((px+1)/W*n));
+      let v = 0; for (let f = f0; f < f1 && f < n; f++) if (a[f] > v) v = a[f];
+      const y = plotH - (v/mx)*(plotH-6);
+      gx.moveTo(px+.5, plotH); gx.lineTo(px+.5, y);
+    }
+    gx.stroke();
+  };
+  draw(arr, colA); if (arrB){ gx.globalAlpha = .6; draw(arrB, colB); gx.globalAlpha = 1; }
+  // cuts
+  gx.strokeStyle = colBad; gx.globalAlpha = .8;
+  for (let i = 1; i < n; i++) if (st.step[i] > 25){ const x = Math.floor(i/n*W)+.5; gx.beginPath(); gx.moveTo(x,0); gx.lineTo(x,6); gx.stroke(); }
+  gx.globalAlpha = 1;
+  // flagged markers (small dots at the top)
+  // cursor
+  const cxp = (S.frame+.5)/n*W; gx.strokeStyle = cssVar('--text'); gx.lineWidth = 1.5; gx.beginPath(); gx.moveTo(cxp,0); gx.lineTo(cxp,H); gx.stroke();
+  gx.fillStyle = cssVar('--dim'); gx.font = '11px system-ui'; gx.fillText(m==='bytes' ? 'max ' + Math.round(mx) + ' B' : 'max ' + fmt(mx), 4, 12);
+  $('graphNote').textContent = (m==='bytes' ? 'Blue = A, amber = B (video bytes per frame). ' : '') + 'Red ticks mark big scene changes (average change between two frames above 25). Dashed line = flag threshold (' + S.flagged.length + ' frames flagged). Click or drag to jump.';
+}
+function graphSeek(ev){
+  if (!S.stats) return; const r = gc.getBoundingClientRect();
+  const f = Math.floor((ev.clientX - r.left)/r.width*S.stats.n); stopPlay(); show(Math.max(0, Math.min(S.stats.n-1, f)));
+}
+let dragging = false;
+gc.addEventListener('mousedown', e=>{ dragging = true; graphSeek(e); });
+window.addEventListener('mousemove', e=>{ if (dragging) graphSeek(e); });
+window.addEventListener('mouseup', ()=>dragging = false);
+
+// ------------------------------------------------------------ transport / audio
+function stopPlay(){
+  if (!S.playing) return; S.playing = false; $('bPlay').textContent = '▶ Play';
+  if (S.audio && S.audio.src){ try{ S.audio.src.stop(); S.audio.src.disconnect(); }catch(e){} S.audio.src = null; }
+}
+function ensureAudio(){
+  if (S.audio) return S.audio;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+  try {
+    const ctx = new AC(), A = S.A, total = A.audioTotal();
+    const buf = ctx.createBuffer(1, Math.max(1,total), 22050), ch = buf.getChannelData(0);
+    let p = 0; for (const r of A.recs) if (r.audio){ for (let k=0;k<r.audio.length;k++) ch[p++] = (r.audio[k]-128)/128; }
+    const gain = ctx.createGain(); gain.connect(ctx.destination);
+    S.audio = { ctx, buf, gain, src:null };
+  } catch(e){ S.audio = null; }
+  return S.audio;
+}
+function play(){
+  if (S.playing || !S.A || S.busy) return;
+  if (S.frame >= S.n-1) show(0);
+  const au = ensureAudio(), speed = +$('speed').value, startFrame = S.frame;
+  S.playing = true; $('bPlay').textContent = '⏸ Pause';
+  let t0 = performance.now(), ctxT0 = 0;
+  if (au){
+    au.ctx.resume(); au.gain.gain.value = $('mute').checked ? 0 : 1;
+    const src = au.ctx.createBufferSource(); src.buffer = au.buf; src.playbackRate.value = speed; src.connect(au.gain);
+    src.start(0, Math.min(startFrame/FPS, au.buf.duration)); au.src = src; ctxT0 = au.ctx.currentTime;
+  }
+  const tick = ()=>{
+    if (!S.playing) return;
+    const el = (au ? (au.ctx.currentTime - ctxT0) : (performance.now()-t0)/1000) * speed;
+    let f = startFrame + Math.floor(el*FPS);
+    if (f >= S.n-1){
+      if ($('loop').checked){ stopPlay(); show(0); play(); return; }
+      show(S.n-1); stopPlay(); return;
+    }
+    if (f !== S.frame) show(f);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+const go = (d)=>{ stopPlay(); show(S.frame + d); };
+$('bPlay').onclick = ()=>S.playing ? stopPlay() : play();
+$('bBack').onclick = ()=>go(-1); $('bFwd').onclick = ()=>go(1);
+$('bBack15').onclick = ()=>go(-15); $('bFwd15').onclick = ()=>go(15);
+$('bFirst').onclick = ()=>{ stopPlay(); show(0); }; $('bLast').onclick = ()=>{ stopPlay(); show(S.n-1); };
+$('seek').oninput = (e)=>{ stopPlay(); show(+e.target.value); };
+$('frameNum').onchange = (e)=>{ stopPlay(); show(+e.target.value||0); };
+$('speed').onchange = ()=>{ if (S.playing){ stopPlay(); play(); } };
+$('mute').onchange = ()=>{ if (S.audio) S.audio.gain.gain.value = $('mute').checked ? 0 : 1; };
+$('zoom').onchange = (e)=>{ S.zoom = e.target.value; paint(); };
+$('aspect').onchange = paint; $('amp').onchange = paint;
+$('metric').onchange = ()=>buildFlags(true);
+$('thr').onchange = ()=>buildFlags(false);
+document.querySelectorAll('#modes button').forEach(b=>b.onclick = ()=>{ S.mode = b.dataset.m; paint(); });
+const jumpFlag = (dir)=>{
+  if (!S.flagged.length) return; stopPlay();
+  let t = null;
+  if (dir > 0) t = S.flagged.find(f=>f > S.frame); else for (let k = S.flagged.length-1; k >= 0; k--) if (S.flagged[k] < S.frame){ t = S.flagged[k]; break; }
+  if (t === null || t === undefined) t = dir > 0 ? S.flagged[0] : S.flagged[S.flagged.length-1];
+  show(t);
+};
+$('nextFlag').onclick = ()=>jumpFlag(1); $('prevFlag').onclick = ()=>jumpFlag(-1);
+$('theme').onclick = ()=>{ const r=document.documentElement, cur = r.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'); r.dataset.theme = cur==='light'?'dark':'light'; drawGraph(); };
+$('savePng').onclick = ()=>{ if (!S.rgbA) return; cv.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='fvf_frame_'+S.frame+'_'+S.mode+'.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); }); };
+
+// pixel inspector + wipe
+cv.addEventListener('mousemove', e=>{
+  if (!S.rgbA) return;
+  const r = cv.getBoundingClientRect(); let x = Math.floor((e.clientX-r.left)/r.width*cv.width), y = Math.floor((e.clientY-r.top)/r.height*200);
+  if (S.mode === 'wipe' && (e.buttons & 1)){ S.wipeX = Math.max(0, Math.min(1, (e.clientX-r.left)/r.width)); paint(); }
+  if (S.mode === 'sbs' && x >= 328) x -= 328;
+  if (x < 0 || x > 319 || y < 0 || y > 199){ return; }
+  const p = (y*320+x)*3, a = S.rgbA, b = S.rgbB;
+  let t = 'x ' + x + '  y ' + y + '   A (' + a[p] + ',' + a[p+1] + ',' + a[p+2] + ')';
+  if (b) t += '   B (' + b[p] + ',' + b[p+1] + ',' + b[p+2] + ')   B−A (' + (b[p]-a[p]) + ',' + (b[p+1]-a[p+1]) + ',' + (b[p+2]-a[p+2]) + ')';
+  $('inspect').textContent = t;
+});
+cv.addEventListener('mousedown', e=>{ if (S.mode === 'wipe'){ const r = cv.getBoundingClientRect(); S.wipeX = Math.max(0, Math.min(1, (e.clientX-r.left)/r.width)); paint(); } });
+
+// keyboard
+window.addEventListener('keydown', e=>{
+  const t = e.target; if (t && (t.tagName === 'INPUT' && t.type !== 'range' && t.type !== 'checkbox' || t.tagName === 'SELECT')) return;
+  if (!S.A || S.busy || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key; let used = true;
+  if (k === ' ') S.playing ? stopPlay() : play();
+  else if (k === 'ArrowLeft') go(e.shiftKey ? -15 : -1);
+  else if (k === 'ArrowRight') go(e.shiftKey ? 15 : 1);
+  else if (k === 'Home'){ stopPlay(); show(0); } else if (k === 'End'){ stopPlay(); show(S.n-1); }
+  else if (k === '[') jumpFlag(-1); else if (k === ']') jumpFlag(1);
+  else if (k === 'f' || k === 'F'){ if (S.B){ S.mode = S.mode === 'A' ? 'B' : 'A'; paint(); } }
+  else if (k >= '1' && k <= '5'){ const m = ['A','B','sbs','diff','wipe'][+k-1]; if (S.B || m === 'A'){ S.mode = m; paint(); } }
+  else if (k === '+' || k === '='){ const z=$('zoom'); if (z.selectedIndex < z.options.length-1){ z.selectedIndex++; S.zoom = z.value; paint(); } }
+  else if (k === '-'){ const z=$('zoom'); if (z.selectedIndex > 0){ z.selectedIndex--; S.zoom = z.value; paint(); } }
+  else used = false;
+  if (used) e.preventDefault();
+});
+window.addEventListener('resize', ()=>{ if (S.A){ paint(); drawGraph(); } });
+
+// file pickers + drag and drop
+for (const slot of ['A','B']){
+  const inp = $('file'+slot), drop = $('drop'+slot);
+  $('open'+slot).onclick = ()=>inp.click();
+  inp.onchange = ()=>{ if (inp.files[0]) loadInto(slot, inp.files[0]); inp.value = ''; };
+  drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', ()=>drop.classList.remove('over'));
+  drop.addEventListener('drop', e=>{ e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) loadInto(slot, f); });
+}
+$('clearB').onclick = ()=>{ S.B = null; $('nameB').textContent = 'drop a file here to compare'; $('clearB').classList.add('hidden'); S.mode = 'A'; startAnalysis(); };
+window.addEventListener('dragover', e=>e.preventDefault()); window.addEventListener('drop', e=>e.preventDefault());
+
+// test hook (used by the automated tests; harmless otherwise)
+window.__fvfViewer = { S, Clip, loadBytes: async (slot, name, bytes)=>{ S[slot] = new Clip(name, bytes); $(slot==='A'?'nameA':'nameB').textContent = name; $('clearB').classList.toggle('hidden', !S.B); await startAnalysis(); }, show, paint };
+})();
+</script>
+</body>
+</html>

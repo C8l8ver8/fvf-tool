@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.png
+*.fvf
+*.zip
+*.log
+*.work/
+test_output/
+ref/
+fvf_viewer.html
+movie.map
+zip_listing.txt

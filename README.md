@@ -227,7 +227,7 @@ Advanced options (the defaults suit most videos):
 | `--protect P` | 0.97 | With `--floor` and a pass-1 error file: frames pass 1 codes almost perfectly keep at least this fraction of their planned size. |
 | `--mad-tilt T` | 0 (off) | Byte-neutral: weight frames by (pass-1 error / 75th percentile) ** T so that frames pass 1 codes badly get more bytes. |
 | `--mad-tilt-min X`, `--mad-tilt-max Y` | 1.0, 1.6 | Smallest and largest weight `--mad-tilt` may apply (1.0 means no frame is reduced by the weighting). |
-| `--frame-cap B` | 24000 | Largest video chunk pass 2 may spend on one frame (the originals never exceed 18,008). |
+| `--frame-cap B` | 24000 | Largest video chunk pass 2 may spend on one frame (the largest video chunk in the original files is 18,036 B; 25 of the 27 never exceed 18,008). |
 | `--key-boost R` | 0 (off) | Byte-neutral: each key frame takes this fraction of the budgets of the three frames after it. |
 | `--no-autoscale` | autoscale on | By default the starting scale is lowered until the packed plan is predicted to fit. This switch disables that. |
 
@@ -413,7 +413,7 @@ The tool is plain Python. Install Python 3, numpy and (optionally) ffmpeg and Pi
 - `fvflib/encoder7.py` is the frame encoder used by `fvf.py`. It builds on `encoder4.py` (rate control), `encoder3.py` (block matching and opcode packing) and `encoder2.py` (constants and the temporal-skip builder). `recontainer_lite.py` builds frame records. `check_fvf.py` implements `check` and `compare`, and `patch_zip.py` implements `patch-zip`.
 - Encoder behaviour can be changed with environment variables (read at import, so worker processes see them): `FVF_DIST=sad|sse|p15` (distortion measure, default `sad`), `FVF_CTX=0|1` (context-aware byte model, default `1`) and `FVF_COST_C5` (modelled byte cost of a motion-copy block).
 - **Frame structure of the originals.** Frame 0 has flags 5 (decoded 16 times; it consists of 6000 affine blocks, about 18 KB). Every frame with index divisible by 4 has flags 4 (the buffers swap, so it becomes the reference); all others have flags 0 and predict from the last key frame. The encoder follows this structure.
-- **Container rules the encoder follows.** Blocks are multiples of 2048 bytes and at most 63,488 bytes. The first block holds three frames (at most 61,440 bytes); later blocks hold at most six. Header bytes 20–23 hold the file offset of the last block.
+- **Container rules the encoder follows.** Blocks are multiples of 2048 bytes and at most 63,488 bytes. The first block holds three frames (at most 61,440 bytes); the encoder puts at most six frames in each later block (the originals have up to seven). Header bytes 20–23 hold the file offset of the last block.
 - **Tests.** The viewer's JavaScript decoder is a port of `decoder.py`. `python viewer_src/mkref.py FILE.fvf ...` writes reference hashes, and `node viewer_src/test_js.js FILE.fvf ...` checks the JavaScript output against them (needs Node.js). `python viewer_src/build_viewer.py` builds the single-file viewer from `viewer_src/viewer_src.html` and `viewer_src/fvf_decoder.js`.
 
 ---

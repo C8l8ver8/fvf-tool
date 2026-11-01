@@ -1,6 +1,6 @@
 # fvf 1.0.0
 
-Command-line tool and viewer for the FVF video format (Total Multimedia / SoftVideo) used by *Star Trek: The Next Generation – A Final Unity* (MS-DOS, 1995).
+Command-line tool and viewer for the FVF video format (Total Multimedia / SoftVideo) used by *Star Trek: The Next Generation - A Final Unity* (MS-DOS, 1995).
 
 ## What it does
 

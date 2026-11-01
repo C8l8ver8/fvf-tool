@@ -89,7 +89,7 @@ def scan_container(data):
     if blocks:
         b0 = blocks[0]; v0 = frames[0]['vlen'] if frames else 0
         if b0['fc'] != 3 or b0['size'] > 61440 or v0 > 38010:
-            r['info'].append('first block holds %d frame(s) in %d bytes with a %d-byte frame 0. The original files have 3 frames in at most 61,440 bytes' % (b0['fc'], b0['size'], v0))
+            r['info'].append('first block holds %d frame(s) in %d bytes with a %d-byte frame 0. The original files have 3 frames in the first block (at most 59,392 bytes); this tool allows up to 61,440 bytes' % (b0['fc'], b0['size'], v0))
         lo = u32(data, 20)
         if lo != blocks[-1]['pos']:
             r['warn'].append('header field at byte 20 is %d but the last block starts at %d. They are equal in every original file; if they differ the game may fail to load the file' % (lo, blocks[-1]['pos']))

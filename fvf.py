@@ -255,7 +255,7 @@ def plan_slack(vids, auds, pal, target):
 
 
 def pack_to_size(vids, auds, src_hdr, pal, target):
-    """Pack the frame records into blocks as the original files do (3 frames in the first block, then at most 6), and spread the
+    """Pack the frame records into blocks (3 frames in the first block, then at most 6; the originals have up to 7), and spread the
     slack inside the blocks so the file is exactly `target` bytes. Return (file_bytes, 0), or (None, -overflow) if it does not fit."""
     import recontainer_lite as rc
     recs = [rc.rec(v, a, pal if i == 0 else None) for i, (v, a) in enumerate(zip(vids, auds))]
@@ -488,7 +488,7 @@ def main():
         x.add_argument('--floor', type=float, default=0.0, help='every frame gets at least this fraction of the original frame size; the others pay (0 = off)')
         x.add_argument('--floor-min', dest='floor_min', type=float, default=0.0, help='with --floor: frames whose pass-1 plan is below this many bytes (near-static frames) are not lifted')
         x.add_argument('--floor-mad', dest='floor_mad', type=float, default=0.03, help='with --floor: frames whose pass-1 picture error (MAD) is below this are not lifted (needs the *_mad.csv written by pass 1)')
-        x.add_argument('--frame-cap', dest='frame_cap', type=int, default=24000, help='largest video chunk pass 2 may spend on one frame (the originals never exceed 18,008 B)')
+        x.add_argument('--frame-cap', dest='frame_cap', type=int, default=24000, help='largest video chunk pass 2 may spend on one frame (the largest chunk in the originals is 18,036 B)')
         x.add_argument('--mad-tilt', dest='mad_tilt', type=float, default=0.0, help='byte-neutral: weight frames by (pass-1 error / 75th percentile) ** this, so visibly worse frames get more bytes (0 = off; try 0.25)')
         x.add_argument('--mad-tilt-min', dest='mad_tilt_min', type=float, default=1.0, help='smallest weight --mad-tilt may give a frame (1.0 = never cut by the weighting)')
         x.add_argument('--protect', type=float, default=0.97, help='with --floor and a pass-1 error file: frames pass 1 codes almost perfectly keep at least this fraction of their plan')
